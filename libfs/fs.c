@@ -12,19 +12,34 @@
  // blocks containing the meta-information
  // about the file system (superblock, FAT and root directory)
 
-// struct mystruct
-// {
-//   int32_t   a;
-//   int16_t   b;
-//   int16_t   c;
-//   int32_t   padding[2];
-// };
+//file system structs (superblock,FAT)
+struct __attribute__((__packed__)) superBlock
+{
+  unint8_t signature [8];
+  unint2_t totalblockCount;
+  unint2_t rootDir_blockIndex;
+  unint2_t datablock_startIndex;
+  unint2_t datablockCount;
+  unint2_t fatblockCount;
+  unint8_t padding[4079];
+};
 
-// struct superblock
-// {
-//   ???
-// };
+struct __attribute__((__packed__)) fileInfo //rootentry/rootdirec as an array
+{
+  char filename[FS_FILENAME_LEN];
+  uint32_t filesize;
+  uint16_t firstblock_index;
+  unint8_t padding[10];
+};
 
+struct __attribute__((__packed__)) fsMeta
+{
+  struct superBlock superblock;
+  struct fileInfo rootDir [FS_FILE_MAX_COUNT];
+  uint16_t *fat;
+};
+
+static struct fsMeta* currFS;
 
 int fs_mount(const char *diskname)
 {
