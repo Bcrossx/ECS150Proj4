@@ -82,6 +82,14 @@ int isFilenameInvalid(const char *filename){
 	return -1;
 }
 
+bool isFileOpen(int root_idx){
+	for(int i = 0; i < FS_OPEN_MAX_COUNT; i++){
+		if(currFS.fd_table[i].root_idx == root_idx)
+			return true;
+	}
+	return false;
+}
+
 int fs_mount(const char *diskname)
 {
 	char *signature = "ECS150FS";
@@ -208,6 +216,8 @@ int fs_delete(const char *filename)
 
 	for(int i = 0; i < FS_FILE_MAX_COUNT; i++){
 		if(strcmp(filename, (char *) currFS.rootDir[i].filename) == 0) {
+			if(isFileOpen(i)) //returns -1 if file is currently open
+				return -1;
 			int currBlock = currFS.rootDir[i].firstblock_index;
 			while(currBlock != FAT_EOC){
 				int nextBlock = currFS.fat[currBlock];
@@ -291,7 +301,10 @@ int fs_close(int fd)
 {
 	/* TODO: Phase 3 */
 	// Close file descriptor
-	if(fd >= FS_OPEN_MAX_COUNT || currFS.fd_table[fd].root_idx == -1)
+	if(!mountedDisk)
+		return -1;
+
+	if(fd < 0 || fd >= FS_OPEN_MAX_COUNT || currFS.fd_table[fd].root_idx == -1)
 		return -1;
 
 	currFS.fd_table[fd].root_idx = -1;
@@ -301,7 +314,10 @@ int fs_close(int fd)
 int fs_stat(int fd)
 {
 	/* TODO: Phase 3 */
-	if(fd >= FS_OPEN_MAX_COUNT || currFS.fd_table[fd].root_idx == -1)
+	if(!mountedDisk)
+		return -1;
+
+	if(fd < 0 || fd >= FS_OPEN_MAX_COUNT || currFS.fd_table[fd].root_idx == -1)
 		return -1;
 	
 	int idx = currFS.fd_table[fd].root_idx;
@@ -312,7 +328,10 @@ int fs_lseek(int fd, size_t offset)
 {
 	/* TODO: Phase 3 */
 	// Move file's offset
-	if(fd >= FS_OPEN_MAX_COUNT || currFS.fd_table[fd].root_idx == -1)
+	if(!mountedDisk)
+		return -1;
+
+	if(fd < 0 || fd >= FS_OPEN_MAX_COUNT || currFS.fd_table[fd].root_idx == -1)
 		return -1;
 
 	int idx = currFS.fd_table[fd].root_idx;
