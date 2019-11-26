@@ -10,12 +10,6 @@
 
 #define FAT_EOC 0xFFFF
 
-/* TODO: Phase 1 */
- // For phase1 start by defining the data structures corresponding to the
- // blocks containing the meta-information
- // about the file system (superblock, FAT and root directory)
-
-//file system structs (superblock,FAT)
 struct __attribute__((__packed__)) superBlock
 {
 	uint8_t signature[8];
@@ -35,11 +29,19 @@ struct __attribute__((__packed__)) fileInfo
 	uint8_t padding[10];
 };
 
+struct fileDesc
+{
+	size_t offset;
+	int root_idx;
+	//int open; //count < max
+};
+
 struct __attribute__((__packed__)) fsMeta
 {
 	struct superBlock superblock;
 	uint16_t *fat;
 	struct fileInfo *rootDir;
+	struct fileDesc fd_table [FS_OPEN_MAX_COUNT];
 };
 
 static struct fsMeta currFS;
@@ -115,6 +117,11 @@ int fs_mount(const char *diskname)
 	currFS.rootDir = malloc(FS_FILE_MAX_COUNT * sizeof(struct fileInfo));
 	if(block_read(currFS.superblock.rootDir_blockIndex, currFS.rootDir) == -1)
 		return -1;
+	
+	// initializing root index for all file descriptors to -1
+	for(int i = 0; i < FS_OPEN_MAX_COUNT; i++){
+		currFS.fd_table[i].root_idx = -1;
+	}
 
 	mountedDisk = true;
 	return 0;
@@ -234,33 +241,85 @@ int fs_ls(void)
 int fs_open(const char *filename)
 {
 	// Initialize and return file descriptor
-// 32 file descriptors max
-// Can open same file multiple times
-// Contains file's offset (initially 0)
+	// 32 file descriptors max
+	// Can open same file multiple times
+	// Contains file's offset (initially 0)
 
-//fd = open(*filename, flags);
-	return 0;
+	//first empty file descripts (find first null)
+	//search root dir for *filename
+	//point file info to the found root dir entry
+	//set offset to 0
+
+	if(!mountedDisk)
+		return -1;
+
+	if(isFilenameInvalid(filename))
+		return -1;
+
+	int fd = -1; //file descriptor
+
+	for(int i = 0; i < FS_OPEN_MAX_COUNT; i++){
+		if(currFS.fd_table[i].root_idx == -1){
+			fd = i; //found empty fd_table spot
+			break;
+		}
+	}
+
+	if(fd == -1)
+		return -1;
+
+	for(int j = 0; j < FS_FILE_MAX_COUNT; j++){
+		if(strcmp((char *) currFS.rootDir[j].filename, filename) == 0){
+			currFS.fd_table[fd].offset = 0; //set offset to 0
+			currFS.fd_table[fd].root_idx = j; //point file_info to found root dir entry
+			return fd;
+		}
+	}
+
+	return -1;
+	/*
+	int openf = currFS.fd_table[fd].open;
+	if(openf < FS_OPEN_MAX_COUNT){
+		++openf;
+	} else{
+		return -1;
+	}
+	*/
 }
 
 int fs_close(int fd)
 {
 	/* TODO: Phase 3 */
 	// Close file descriptor
+	if(fd >= FS_OPEN_MAX_COUNT || currFS.fd_table[fd].root_idx == -1)
+		return -1;
+
+	currFS.fd_table[fd].root_idx = -1;
 	return 0;
 }
 
 int fs_stat(int fd)
 {
 	/* TODO: Phase 3 */
-	// Return file's size
-	return 0;
-
+	if(fd >= FS_OPEN_MAX_COUNT || currFS.fd_table[fd].root_idx == -1)
+		return -1;
+	
+	int idx = currFS.fd_table[fd].root_idx;
+	return currFS.rootDir[idx].filesize;
 }
 
 int fs_lseek(int fd, size_t offset)
 {
 	/* TODO: Phase 3 */
 	// Move file's offset
+	if(fd >= FS_OPEN_MAX_COUNT || currFS.fd_table[fd].root_idx == -1)
+		return -1;
+
+	int idx = currFS.fd_table[fd].root_idx;
+	if(currFS.rootDir[idx].filesize < offset)
+		return -1;
+	
+	currFS.fd_table[fd].offset = offset;
 	return 0;
 }
 
