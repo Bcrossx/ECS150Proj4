@@ -202,11 +202,12 @@ int fs_delete(const char *filename)
 	for(int i = 0; i < FS_FILE_MAX_COUNT; i++){
 		if(strcmp(filename, (char *) currFS.rootDir[i].filename) == 0) {
 			int currBlock = currFS.rootDir[i].firstblock_index;
-			while(currBlock != 0){
+			while(currBlock != FAT_EOC){
 				int nextBlock = currFS.fat[currBlock];
 				currFS.fat[currBlock] = 0;
 				currBlock = nextBlock;
 			}
+			currFS.fat[currBlock] = 0;
 			strcpy("\0", (char *) currFS.rootDir[i].filename);
 			return 0;
 		}
