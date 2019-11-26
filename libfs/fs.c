@@ -16,9 +16,9 @@
 struct fileDesc
 {
   size_t offset;
-  fileInfo* file_info;
-  int openFiles; //count < max
-}
+  struct fileInfo* file_info;
+  int open; //count < max
+};
 
 //file system structs (superblock,FAT)
 struct __attribute__((__packed__)) superBlock
@@ -46,7 +46,6 @@ struct __attribute__((__packed__)) fsMeta
   struct fileInfo rootDir [FS_FILE_MAX_COUNT];
   uint16_t *fat;
   struct fileDesc fd_table [FS_OPEN_MAX_COUNT];
-  //#open files
 };
 
 static struct fsMeta* currFS;
@@ -146,28 +145,31 @@ int fs_info(void)
   return 0;
 }
 
-// int fs_create(const char *filename)
-// {
-// 	/* TODO: Phase 2 */
-//   // Create a new file
-//   // Initially, size is 0 and pointer to first data block is FAT_EOC
-//
-// }
-//
-// int fs_delete(const char *filename)
-// {
-// 	/* TODO: Phase 2 */
-//   // Delete an existing file
-// // Free allocated data blocks, if any
-// }
-//
-// int fs_ls(void)
-// {
-// 	/* TODO: Phase 2 */
-//   //List all the existing files
-//
-// }
-//
+int fs_create(const char *filename)
+{
+	/* TODO: Phase 2 */
+  // Create a new file
+  // Initially, size is 0 and pointer to first data block is FAT_EOC
+
+  return 0;
+}
+
+int fs_delete(const char *filename)
+{
+	/* TODO: Phase 2 */
+  // Delete an existing file
+// Free allocated data blocks, if any
+  return 0;
+}
+
+int fs_ls(void)
+{
+	/* TODO: Phase 2 */
+  //List all the existing files
+
+  return 0;
+}
+
 int fs_open(const char *filename)
 {
   // Initialize and return file descriptor
@@ -175,14 +177,36 @@ int fs_open(const char *filename)
   // Can open same file multiple times
   // Contains file's offset (initially 0)
 
-  int fd; //file descriptor
+  //first empty file descripts (find first null)
+  //search root dir for *filename
+  //point file info to the found root dir entry
+  //set offset to 0
 
+  int fd = 0; //file descriptor
 
-  fileDesc->offset = 0;
+  for(int i = 0; i < FS_OPEN_MAX_COUNT; i++){
+    if(currFS->fd_table[i].file_info == NULL){
+      fd = i; //found empty fd_table spot
+      break;
+    }
+  }
 
-  int &openf = fileDesc->openFiles;
+  for(int j = 0; j < FS_FILE_MAX_COUNT; j++){
+    if(currFS->rootDir[j].filename == filename){
+      currFS->fd_table[fd].offset = 0; //set offset to 0
+      currFS->fd_table[fd].file_info = currFS->rootDir+j; //point file_info to found root dir entry
+        break;
+    }
+    if(j == FS_FILE_MAX_COUNT){
+      return -1;
+    }
+  }
+
+  int openf = currFS->fd_table[fd].open;
   if(openf < FS_OPEN_MAX_COUNT){
     ++openf;
+  }else{
+    return -1;
   }
 
   return fd;
@@ -190,44 +214,64 @@ int fs_open(const char *filename)
 
 int fs_close(int fd)
 {
-	/* TODO: Phase 3 */
   // Close file descriptor
+
+  if(mountedDisk == false){ //check if fs is mounted (mountedDisk = true)
+    return -1;
+  }
+    if(currFS->fd_table[fd].file_info == NULL){
+      return 0;
+    }else{
+      currFS->fd_table[fd].file_info = NULL;
+    }
+
+  int openf = currFS->fd_table[fd].open;
+  --openf;
+  if(openf < 0){
+    return -1;
+  }
+  //error checking
 
   return 0;
 }
 
 int fs_stat(int fd)
 {
-	/* TODO: Phase 3 */
-  // Return file's size
-
-  return fd_table[1].file_info.filesize;
+  //error checking
+  return currFS->fd_table[1].file_info->filesize;
 }
 
 int fs_lseek(int fd, size_t offset)
 {
-	/* TODO: Phase 3 */
   // Move file's offset
+  // Just modify offset
+
+  //check if offset is less than size of file
+  currFS->fd_table[fd].offset = offset;
+  //error checking
 
   return 0;
 }
 
-// // Write/read most difficult
-// // Don't leave for last minute
-// int fs_write(int fd, void *buf, size_t count)
-// {
-// 	/* TODO: Phase 4 */
-//   // Write a certain number of bytes to a file
-// // Extend file if necessary
-//
-//   // lseek(fd, block_nr * BLOCK_SIZE);
-//    // write(fd, buf, BLOCK_SIZE);
-// }
-//
-// int fs_read(int fd, void *buf, size_t count)
-// {
-// 	/* TODO: Phase 4 */
-//   // Read a certain number of bytes from a file
-//   // lseek(fd, block_nr * BLOCK_SIZE);
-//   // read(fd, buf, BLOCK_SIZE);
-// }
+// Write/read most difficult
+// Don't leave for last minute
+int fs_write(int fd, void *buf, size_t count)
+{
+	/* TODO: Phase 4 */
+  // Write a certain number of bytes to a file
+// Extend file if necessary
+
+  // lseek(fd, block_nr * BLOCK_SIZE);
+   // write(fd, buf, BLOCK_SIZE);
+
+   return 0;
+}
+
+int fs_read(int fd, void *buf, size_t count)
+{
+	/* TODO: Phase 4 */
+  // Read a certain number of bytes from a file
+  // lseek(fd, block_nr * BLOCK_SIZE);
+  // read(fd, buf, BLOCK_SIZE);
+  return 0;
+}
