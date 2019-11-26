@@ -70,6 +70,16 @@ int get_root_free(){
 	return count;
 }
 
+int isFilenameInvalid(const char *filename){
+	if(filename == NULL || filename[0] == '\0')
+		return -1;
+	for(int i = 1; i < FS_FILENAME_LEN; i++){
+		if(filename[i] == '\0')
+			return 0;
+	}
+	return -1;
+}
+
 int fs_mount(const char *diskname)
 {
 	char *signature = "ECS150FS";
@@ -147,14 +157,6 @@ int fs_info(void)
 	printf("data_blk_count=%d\n", currFS.superblock.datablockCount);
 	printf("fat_free_ratio=%d/%d\n", get_FAT_free(), currFS.superblock.datablockCount);
 	printf("rdir_free_ratio=%d/%d\n",  get_root_free(), FS_FILE_MAX_COUNT);
-	return 0;
-}
-
-int isFilenameInvalid(const char *filename){
-	if(filename == NULL)
-		return -1;
-	if(sizeof(filename) >= FS_FILENAME_LEN)
-		return -1;
 	return 0;
 }
 
