@@ -35,7 +35,7 @@ struct __attribute__((__packed__)) fileInfo
 	uint8_t padding[10];
 };
 
-struct fsMeta
+struct __attribute__((__packed__)) fsMeta
 {
 	struct superBlock superblock;
 	uint16_t *fat;
@@ -164,15 +164,14 @@ int fs_create(const char *filename)
 	// Create a new file
 	// Initially, size is 0 and pointer to first data block is FAT_EOC
 
-	/*
-	if(isFilenameInvalid(filename))
+	if(!mountedDisk || isFilenameInvalid(filename))
 		return -1;
 	
 	int emptyEntry = -1;
 	for(int i = 0; i < FS_FILE_MAX_COUNT; i++){
-		if(strcmp(filename, currFS.rootDir[i].filename) == 0)
+		if(strcmp(filename, (char *) currFS.rootDir[i].filename) == 0)
 			return -1;
-		if(strcmp(currFS.rootDir[i].filename, "\0") == 0)
+		if(strcmp("\0", (char *) currFS.rootDir[i].filename) == 0)
 			emptyEntry = i;
 	}
 
@@ -180,10 +179,10 @@ int fs_create(const char *filename)
 		return -1;
 		
 	struct fileInfo empty = currFS.rootDir[emptyEntry];
-	strcpy(empty.filename, filename);
+	strcpy((char *) empty.filename, filename);
 	empty.firstblock_index = FAT_EOC;
 	empty.filesize = 0;
-	*/
+	
 	return 0;
 }
 
@@ -192,22 +191,25 @@ int fs_delete(const char *filename)
 	/* TODO: Phase 2 */
 	// Delete an existing file
 	// Free allocated data blocks, if any
-	/*
+	
 	if(isFilenameInvalid(filename))
 		return -1;
 	
 	//check if file is opened later
 
 	for(int i = 0; i < FS_FILE_MAX_COUNT; i++){
-		if(strcmp(filename, currFS.rootDir[i].filename) == 0) {
+		if(strcmp(filename, (char *) currFS.rootDir[i].filename) == 0) {
 			int currBlock = currFS.rootDir[i].firstblock_index;
 			while(currBlock != 0){
-				int nextBlock = currFS.fat[nextBlock];
-
+				int nextBlock = currFS.fat[currBlock];
+				currFS.fat[currBlock] = 0;
+				currBlock = nextBlock;
 			}
+			strcpy("\0", (char *) currFS.rootDir[i].filename);
+			return 0;
 		}
 	}
-	*/
+	
 	return -1;
 }
 
@@ -215,6 +217,14 @@ int fs_ls(void)
 {
 	/* TODO: Phase 2 */
 	//List all the existing files
+	if(!mountedDisk) // virtual disk not opened
+		return -1;
+	
+	printf("FS Ls:\n");
+	for(int i = 0; i < FS_FILE_MAX_COUNT; i++){
+		if(strcmp((char *) currFS.rootDir[i].filename, "\0") != 0)
+			printf("file: %s, size: %d, data_blk: %d\n", (char *) currFS.rootDir[i].filename, currFS.rootDir[i].filesize, currFS.rootDir[i].firstblock_index);
+	}
 	return 0;
 }
 
