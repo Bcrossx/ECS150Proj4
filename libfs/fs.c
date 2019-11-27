@@ -418,16 +418,17 @@ int fs_write(int fd, void *buf, size_t count)
 	if(numBlocks == 1){
 		writeToBlock(block_buf, buf, count, *offset % BLOCK_SIZE, 0);
 		written += count;
-		currFS.rootDir[root_idx].filesize = *offset + written;
+		if(currFS.rootDir[root_idx].filesize < *offset + written)
+			currFS.rootDir[root_idx].filesize = *offset + written;
 		fs_lseek(fd, *offset + written);
 		block_write(block_offset + *block_idx, block_buf);
-		currFS.rootDir[root_idx].filesize = *offset;
 		return written;
 	} else {
 		int initial = BLOCK_SIZE - (*offset % BLOCK_SIZE);
 		writeToBlock(block_buf, buf, initial, *offset % BLOCK_SIZE, 0);
 		written += initial;
-		currFS.rootDir[root_idx].filesize = *offset + written;
+		if(currFS.rootDir[root_idx].filesize < *offset + written)
+			currFS.rootDir[root_idx].filesize = *offset + written;
 		fs_lseek(fd, *offset + written);
 		block_write(block_offset + *block_idx, block_buf);
 	}
@@ -449,7 +450,8 @@ int fs_write(int fd, void *buf, size_t count)
 		*block_idx = currFS.fat[*block_idx];
 		block_write(block_offset + *block_idx, buf + written);
 		written += BLOCK_SIZE;
-		currFS.rootDir[root_idx].filesize = *offset + BLOCK_SIZE;
+		if(currFS.rootDir[root_idx].filesize < *offset + BLOCK_SIZE)
+			currFS.rootDir[root_idx].filesize = *offset + BLOCK_SIZE;
 		fs_lseek(fd, *offset + BLOCK_SIZE);
 	}
 
@@ -470,7 +472,8 @@ int fs_write(int fd, void *buf, size_t count)
 		block_read(block_offset + *block_idx, block_buf);
 		writeToBlock(block_buf, buf, count - written, *offset % BLOCK_SIZE, written);
 		block_write(block_offset + *block_idx, block_buf);
-		currFS.rootDir[root_idx].filesize = *offset + count - written;
+		if(currFS.rootDir[root_idx].filesize <  *offset + count - written)
+			currFS.rootDir[root_idx].filesize = *offset + count - written;
 		fs_lseek(fd, *offset + count - written);
 		written = count;
 	}
