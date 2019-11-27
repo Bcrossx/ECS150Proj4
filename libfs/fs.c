@@ -224,7 +224,7 @@ int fs_create(const char *filename)
 	for(int i = 0; i < FS_FILE_MAX_COUNT; i++){
 		if(strcmp(filename, (char *) currFS.rootDir[i].filename) == 0)
 			return -1;
-		if(strcmp("\0", (char *) currFS.rootDir[i].filename) == 0)
+		if(strcmp("\0", (char *) currFS.rootDir[i].filename) == 0 && emptyEntry == -1)
 			emptyEntry = i;
 	}
 
