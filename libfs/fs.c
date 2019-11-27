@@ -401,8 +401,10 @@ int fs_write(int fd, void *buf, size_t count)
 	if(currFS.rootDir[root_idx].firstblock_index == FAT_EOC || isNewDataBlockNeeded(fd)){
 		int fat_idx = -1;
 		for(int i = 0; i < currFS.superblock.datablockCount; i++){
-			if(currFS.fat[i] == 0)
+			if(currFS.fat[i] == 0) {
 				fat_idx = i;
+				break;
+			}
 		}
 
 		if(fat_idx == -1)
@@ -438,8 +440,10 @@ int fs_write(int fd, void *buf, size_t count)
 		if(currFS.fat[*block_idx] == FAT_EOC){
 			int fat_idx = -1;
 			for(int i = 0; i < currFS.superblock.datablockCount; i++){
-				if(currFS.fat[i] == 0)
+				if(currFS.fat[i] == 0) {
 					fat_idx = i;
+					break;
+				}
 			}
 			if(fat_idx == -1)
 				return written;
@@ -460,8 +464,10 @@ int fs_write(int fd, void *buf, size_t count)
 		if(currFS.fat[*block_idx] == FAT_EOC){
 			int fat_idx = -1;
 			for(int i = 0; i < currFS.superblock.datablockCount; i++){
-				if(currFS.fat[i] == 0)
+				if(currFS.fat[i] == 0){
 					fat_idx = i;
+					break;
+				}
 			}
 			if(fat_idx == -1)
 				return written;
