@@ -261,7 +261,8 @@ int fs_delete(const char *filename)
 				currBlock = nextBlock;
 			}
 			currFS.fat[currBlock] = 0;
-			strcpy("\0", (char *) currFS.rootDir[i].filename);
+			strcpy((char *) currFS.rootDir[i].filename, "\0");
+			currFS.rootDir[i].filesize = 0;
 			return 0;
 		}
 	}
