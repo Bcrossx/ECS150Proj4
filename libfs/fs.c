@@ -30,7 +30,7 @@ struct __attribute__((__packed__)) superBlock //superblock struct
   uint8_t padding[4079];
 };
 
-struct __attribute__((__packed__)) fileInfo //rootentry/rootdirec as an array
+struct __attribute__((__packed__)) fileInfo 
 {
   char filename[FS_FILENAME_LEN];
   uint32_t filesize;
@@ -85,6 +85,7 @@ int isFilenameInvalid(const char *filename){ //checks for valid filename
 	}
 	return -1;
 }
+
 bool isFileOpen(int root_idx){
 	for(int i = 0; i < FS_OPEN_MAX_COUNT; i++){
 		if(currFS.fd_table[i].root_idx == root_idx)
@@ -178,7 +179,6 @@ int fs_mount(const char *diskname)
 }
 
 int fs_umount(void)
-{
   if(mountedDisk == false) // disk not mounted
     return -1;
 
@@ -201,6 +201,12 @@ int fs_umount(void)
 
   return 0;
 
+	//close disk
+	if(block_disk_close() == -1)
+		return -1;
+
+	mountedDisk = false;
+	return 0;
 }
 
 int fs_info(void)
@@ -219,68 +225,70 @@ int fs_info(void)
 	printf("data_blk_count=%d\n", currFS.superblock.datablockCount);
 	printf("fat_free_ratio=%d/%d\n", get_FAT_free(), currFS.superblock.datablockCount);
 	printf("rdir_free_ratio=%d/%d\n",  get_root_free(), FS_FILE_MAX_COUNT);
-
   return 0;
 }
 
 int fs_create(const char *filename)
 {
-  // Create a new file
-  // Initially, size is 0 and pointer to first data block is FAT_EOC
-  if(!mountedDisk || isFilenameInvalid(filename))
-  		return -1;
+	// Create a new file
+	// Initially, size is 0 and pointer to first data block is FAT_EOC
 
-  	int emptyEntry = -1;
-  	for(int i = 0; i < FS_FILE_MAX_COUNT; i++){
-  		if(strcmp(filename, (char *) currFS.rootDir[i].filename) == 0)
-  			return -1;
-  		if(strcmp("\0", (char *) currFS.rootDir[i].filename) == 0)
-  			emptyEntry = i;
-  	}
+	if(!mountedDisk || isFilenameInvalid(filename))
+		return -1;
+	
+	int emptyEntry = -1;
+	for(int i = 0; i < FS_FILE_MAX_COUNT; i++){
+		if(strcmp(filename, (char *) currFS.rootDir[i].filename) == 0)
+			return -1;
+		if(strcmp("\0", (char *) currFS.rootDir[i].filename) == 0)
+			emptyEntry = i;
+	}
 
-  	if(emptyEntry == -1)
-  		return -1;
-
-  	struct fileInfo empty = currFS.rootDir[emptyEntry];
-  	strcpy((char *) empty.filename, filename);
-  	empty.firstblock_index = FAT_EOC;
-  	empty.filesize = 0;
-
-  	return 0;
-}
+	if(emptyEntry == -1)
+		return -1;
+		
+	struct fileInfo *empty = &currFS.rootDir[emptyEntry];
+	strcpy((char *) empty->filename, filename);
+	empty->firstblock_index = FAT_EOC;
+	empty->filesize = 0;
+	
+	return 0;
 
 int fs_delete(const char *filename)
 {
-  // Delete an existing file
-  // Free allocated data blocks, if any
-  if(isFilenameInvalid(filename))
-  return -1;
+	// Delete an existing file
+	// Free allocated data blocks, if any
+	
+	if(isFilenameInvalid(filename))
+		return -1;
+	
+	//check if file is opened later
 
-  //check if file is opened later
-
-  for(int i = 0; i < FS_FILE_MAX_COUNT; i++){
-    if(strcmp(filename, (char *) currFS.rootDir[i].filename) == 0) {
-      int currBlock = currFS.rootDir[i].firstblock_index;
-      while(currBlock != FAT_EOC){
-        int nextBlock = currFS.fat[currBlock];
-        currFS.fat[currBlock] = 0;
-        currBlock = nextBlock;
-      }
-      currFS.fat[currBlock] = 0;
-      strcpy((char *) currFS.rootDir[i].filename, "\0");
-      return 0;
-    }
-  }
-
-return -1;
+	for(int i = 0; i < FS_FILE_MAX_COUNT; i++){
+		if(strcmp(filename, (char *) currFS.rootDir[i].filename) == 0) {
+			if(isFileOpen(i)) //returns -1 if file is currently open
+				return -1;
+			int currBlock = currFS.rootDir[i].firstblock_index;
+			while(currBlock != FAT_EOC){
+				int nextBlock = currFS.fat[currBlock];
+				currFS.fat[currBlock] = 0;
+				currBlock = nextBlock;
+			}
+			currFS.fat[currBlock] = 0;
+			strcpy("\0", (char *) currFS.rootDir[i].filename);
+			return 0;
+		}
+	}
+	
+	return -1;
 }
 
 int fs_ls(void)
 {
-  //List all the existing files
-  if(!mountedDisk) // virtual disk not opened
+	//List all the existing files
+	if(!mountedDisk) // virtual disk not opened
 		return -1;
-
+  
 	printf("FS Ls:\n");
 	for(int i = 0; i < FS_FILE_MAX_COUNT; i++){
 		if(strcmp((char *) currFS.rootDir[i].filename, "\0") != 0)
@@ -392,28 +400,120 @@ int fs_lseek(int fd, size_t offset)
 // Don't leave for last minute
 int fs_write(int fd, void *buf, size_t count)
 {
-  // Write a certain number of bytes to a file
-// Extend file if necessary
+	// Write a certain number of bytes to a file
+	// Extend file if necessary
 
-  // lseek(fd, block_nr * BLOCK_SIZE);
-   // write(fd, buf, BLOCK_SIZE);
+	// lseek(fd, block_nr * BLOCK_SIZE);
+	 // write(fd, buf, BLOCK_SIZE);
 
-   return 0;
-}
-
-int fs_read(int fd, void *buf, size_t count)
-{
-  // Read a certain number of bytes from a file
-  // lseek(fd, block_nr * BLOCK_SIZE);
-  // read(fd, buf, BLOCK_SIZE);
-
-  if(!mountedDisk)
+	if(!mountedDisk)
 		return -1;
 
 	if(fd < 0 || fd >= FS_OPEN_MAX_COUNT || currFS.fd_table[fd].root_idx == -1)
 		return -1;
+	
+	int written = 0;
+	size_t *offset = &currFS.fd_table[fd].offset;
+	int numBlocks = getNumBlocks(count, *offset);
+	int root_idx = currFS.fd_table[fd].root_idx;
 
-	int i = 0; // loop variable
+	uint16_t *block_idx = &currFS.fd_table[fd].block_idx;
+	int block_offset = currFS.superblock.fatblockCount + 2; //superblock + rootblock + fatblocks are offsets
+	char *block_buf = malloc(BLOCK_SIZE *sizeof(char));
+
+	// beginning of new file or end of current data block
+	if(currFS.rootDir[root_idx].firstblock_index == FAT_EOC || isNewDataBlockNeeded(fd)){
+		int fat_idx = -1;
+		for(int i = 0; i < currFS.superblock.datablockCount; i++){
+			if(currFS.fat[i] == 0)
+				fat_idx = i;
+		}
+
+		if(fat_idx == -1)
+			return written;
+		currFS.fat[fat_idx] = FAT_EOC;
+		currFS.fat[*block_idx] = fat_idx;
+		*block_idx = fat_idx;
+		if(currFS.rootDir[root_idx].firstblock_index == FAT_EOC)
+			currFS.rootDir[root_idx].firstblock_index = fat_idx;
+	}
+
+	block_read(block_offset + *block_idx, block_buf);
+	if(numBlocks == 1){
+		writeToBlock(block_buf, buf, count, *offset % BLOCK_SIZE, 0);
+		written += count;
+		currFS.rootDir[root_idx].filesize = *offset + written;
+		fs_lseek(fd, *offset + written);
+		block_write(block_offset + *block_idx, block_buf);
+		currFS.rootDir[root_idx].filesize = *offset;
+		return written;
+	} else {
+		int initial = BLOCK_SIZE - (*offset % BLOCK_SIZE);
+		writeToBlock(block_buf, buf, initial, *offset % BLOCK_SIZE, 0);
+		written += initial;
+		currFS.rootDir[root_idx].filesize = *offset + written;
+		fs_lseek(fd, *offset + written);
+		block_write(block_offset + *block_idx, block_buf);
+	}
+
+	//write middle blocks
+	for(int i = 0; i < numBlocks - 2; i++){
+		if(currFS.fat[*block_idx] == FAT_EOC){
+			int fat_idx = -1;
+			for(int i = 0; i < currFS.superblock.datablockCount; i++){
+				if(currFS.fat[i] == 0)
+					fat_idx = i;
+			}
+			if(fat_idx == -1)
+				return written;
+			currFS.fat[fat_idx] = FAT_EOC;
+			currFS.fat[*block_idx] = fat_idx;
+		}
+
+		*block_idx = currFS.fat[*block_idx];
+		block_write(block_offset + *block_idx, buf + written);
+		written += BLOCK_SIZE;
+		currFS.rootDir[root_idx].filesize = *offset + BLOCK_SIZE;
+		fs_lseek(fd, *offset + BLOCK_SIZE);
+	}
+
+	// write to last block
+	if(numBlocks > 1){
+		if(currFS.fat[*block_idx] == FAT_EOC){
+			int fat_idx = -1;
+			for(int i = 0; i < currFS.superblock.datablockCount; i++){
+				if(currFS.fat[i] == 0)
+					fat_idx = i;
+			}
+			if(fat_idx == -1)
+				return written;
+			currFS.fat[fat_idx] = FAT_EOC;
+			currFS.fat[*block_idx] = fat_idx;
+		}
+		*block_idx = currFS.fat[*block_idx];
+		block_read(block_offset + *block_idx, block_buf);
+		writeToBlock(block_buf, buf, count - written, *offset % BLOCK_SIZE, written);
+		block_write(block_offset + *block_idx, block_buf);
+		currFS.rootDir[root_idx].filesize = *offset + count - written;
+		fs_lseek(fd, *offset + count - written);
+		written = count;
+	}
+
+	return written;
+}
+
+int fs_read(int fd, void *buf, size_t count)
+{
+	// Read a certain number of bytes from a file
+	// lseek(fd, block_nr * BLOCK_SIZE);
+	// read(fd, buf, BLOCK_SIZE);
+
+	if(!mountedDisk)
+		return -1;
+
+	if(fd < 0 || fd >= FS_OPEN_MAX_COUNT || currFS.fd_table[fd].root_idx == -1)
+		return -1;
+  
 	int read = 0;
 	int offset = currFS.fd_table[fd].offset;
 	int numBlocks = getNumBlocks(count, offset);
@@ -429,7 +529,7 @@ int fs_read(int fd, void *buf, size_t count)
 	if(numBlocks == 1){ //less than or equal to one block to read
 		read += copyToBuffer(block_buf, buf, count, offset, 0);
 		fs_lseek(fd, currFS.fd_table[fd].offset + read);
-		return read;
+		return read; 
 	} else { //more than one block to read
 		int initial = BLOCK_SIZE - (offset % BLOCK_SIZE);
 		read += copyToBuffer(block_buf, buf, initial, offset, 0);
@@ -440,7 +540,7 @@ int fs_read(int fd, void *buf, size_t count)
 	}
 
 	//read middle blocks
-	for(i = 1; i < numBlocks - 1; i++){
+	for(int i = 0; i < numBlocks - 2; i++){
 		*block_idx = currFS.fat[*block_idx];
 
 		if(currFS.fat[*block_idx] != FAT_EOC){
@@ -453,7 +553,7 @@ int fs_read(int fd, void *buf, size_t count)
 			fs_lseek(fd, currFS.fd_table[fd].offset + bytesRead);
 			read += bytesRead;
 			return read;
-		}
+		} 
 	}
 
 	//read last block
