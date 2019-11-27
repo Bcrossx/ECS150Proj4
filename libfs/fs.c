@@ -393,7 +393,6 @@ int fs_write(int fd, void *buf, size_t count)
 	size_t *offset = &currFS.fd_table[fd].offset;
 	int numBlocks = getNumBlocks(count, *offset);
 	int root_idx = currFS.fd_table[fd].root_idx;
-	printf("%d", 10);
 
 	uint16_t *block_idx = &currFS.fd_table[fd].block_idx;
 	int block_offset = currFS.superblock.fatblockCount + 2; //superblock + rootblock + fatblocks are offsets
@@ -406,6 +405,7 @@ int fs_write(int fd, void *buf, size_t count)
 			if(currFS.fat[i] == 0)
 				fat_idx = i;
 		}
+
 		if(fat_idx == -1)
 			return written;
 		currFS.fat[fat_idx] = FAT_EOC;
@@ -419,6 +419,7 @@ int fs_write(int fd, void *buf, size_t count)
 	if(numBlocks == 1){
 		writeToBlock(block_buf, buf, count, *offset % BLOCK_SIZE, 0);
 		written += count;
+		currFS.rootDir[root_idx].filesize = *offset + written;
 		fs_lseek(fd, *offset + written);
 		block_write(block_offset + *block_idx, block_buf);
 		currFS.rootDir[root_idx].filesize = *offset;
@@ -427,13 +428,13 @@ int fs_write(int fd, void *buf, size_t count)
 		int initial = BLOCK_SIZE - (*offset % BLOCK_SIZE);
 		writeToBlock(block_buf, buf, initial, *offset % BLOCK_SIZE, 0);
 		written += initial;
+		currFS.rootDir[root_idx].filesize = *offset + written;
 		fs_lseek(fd, *offset + written);
 		block_write(block_offset + *block_idx, block_buf);
-		currFS.rootDir[root_idx].filesize = *offset;
 	}
 
 	//write middle blocks
-	for(int i = 0; i < numBlocks; i++){
+	for(int i = 0; i < numBlocks - 2; i++){
 		if(currFS.fat[*block_idx] == FAT_EOC){
 			int fat_idx = -1;
 			for(int i = 0; i < currFS.superblock.datablockCount; i++){
@@ -449,8 +450,8 @@ int fs_write(int fd, void *buf, size_t count)
 		*block_idx = currFS.fat[*block_idx];
 		block_write(block_offset + *block_idx, buf + written);
 		written += BLOCK_SIZE;
+		currFS.rootDir[root_idx].filesize = *offset + BLOCK_SIZE;
 		fs_lseek(fd, *offset + BLOCK_SIZE);
-		currFS.rootDir[root_idx].filesize = *offset;
 	}
 
 	// write to last block
@@ -470,9 +471,9 @@ int fs_write(int fd, void *buf, size_t count)
 		block_read(block_offset + *block_idx, block_buf);
 		writeToBlock(block_buf, buf, count - written, *offset % BLOCK_SIZE, written);
 		block_write(block_offset + *block_idx, block_buf);
+		currFS.rootDir[root_idx].filesize = *offset + count - written;
 		fs_lseek(fd, *offset + count - written);
 		written = count;
-		currFS.rootDir[root_idx].filesize = *offset;
 	}
 
 	return written;
@@ -517,7 +518,7 @@ int fs_read(int fd, void *buf, size_t count)
 	}
 
 	//read middle blocks
-	for(int i = 0; i < numBlocks; i++){
+	for(int i = 0; i < numBlocks - 2; i++){
 		*block_idx = currFS.fat[*block_idx];
 
 		if(currFS.fat[*block_idx] != FAT_EOC){
