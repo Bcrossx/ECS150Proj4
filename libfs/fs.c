@@ -33,7 +33,7 @@ struct fileDesc
 {
 	size_t offset;
 	int root_idx;
-	//int open; //count < max
+	uint16_t block_idx;
 };
 
 struct __attribute__((__packed__)) fsMeta
@@ -88,6 +88,38 @@ bool isFileOpen(int root_idx){
 			return true;
 	}
 	return false;
+}
+
+bool isNewDataBlockNeeded(int fd){
+	int idx = currFS.fd_table[fd].root_idx;
+	int filesize = currFS.rootDir[idx].filesize;
+	int offset = currFS.fd_table[fd].offset;
+
+	if(offset == filesize && (offset % BLOCK_SIZE) == 0) // if offset is at end of the file
+		return true;
+	return false;
+}
+
+int getNumBlocks(size_t count, int offset){
+	int initial = BLOCK_SIZE - (offset % BLOCK_SIZE);
+	if(initial > count){ // count fits within current block
+		return 1;
+	} else if((count - initial) % BLOCK_SIZE == 0) { // count fits within current block and 0 or more full blocks
+		return 1 + (count - initial) / BLOCK_SIZE;
+	} else // count fits within current block and 1 or more partial blocks
+		return 2 + (count - initial) / BLOCK_SIZE;
+}
+
+int copyToBuffer(char *block_buf, char *buf, int count, int block_offset, int buf_offset){
+	for(int i = 0; i < count; i++){
+		if(block_buf[block_offset + i] != '\0'){
+			buf[buf_offset + i] = block_buf[block_offset + i];
+		} else {
+			buf[buf_offset + i] = '\0';
+			return i + 1;
+		}
+	}
+	return count;
 }
 
 int fs_mount(const char *diskname)
@@ -282,19 +314,12 @@ int fs_open(const char *filename)
 		if(strcmp((char *) currFS.rootDir[j].filename, filename) == 0){
 			currFS.fd_table[fd].offset = 0; //set offset to 0
 			currFS.fd_table[fd].root_idx = j; //point file_info to found root dir entry
+			currFS.fd_table[fd].block_idx = currFS.rootDir[j].firstblock_index;
 			return fd;
 		}
 	}
 
 	return -1;
-	/*
-	int openf = currFS.fd_table[fd].open;
-	if(openf < FS_OPEN_MAX_COUNT){
-		++openf;
-	} else{
-		return -1;
-	}
-	*/
 }
 
 int fs_close(int fd)
@@ -361,5 +386,64 @@ int fs_read(int fd, void *buf, size_t count)
 	// Read a certain number of bytes from a file
 	// lseek(fd, block_nr * BLOCK_SIZE);
 	// read(fd, buf, BLOCK_SIZE);
-	return 0;
+
+	if(!mountedDisk)
+		return -1;
+
+	if(fd < 0 || fd >= FS_OPEN_MAX_COUNT || currFS.fd_table[fd].root_idx == -1)
+		return -1;
+	
+	int i = 0; // loop variable
+	int read = 0;
+	int offset = currFS.fd_table[fd].offset;
+	int numBlocks = getNumBlocks(count, offset);
+
+	uint16_t *block_idx = &currFS.fd_table[fd].block_idx;
+	int block_offset = currFS.superblock.fatblockCount + 2; //superblock + rootblock + fatblocks are offsets
+	char *block_buf = malloc(BLOCK_SIZE *sizeof(char));
+
+	if(isNewDataBlockNeeded(fd))
+		return read;
+
+	block_read(block_offset + *block_idx, block_buf);
+	if(numBlocks == 1){ //less than or equal to one block to read
+		read += copyToBuffer(block_buf, buf, count, offset, 0);
+		fs_lseek(fd, currFS.fd_table[fd].offset + read);
+		return read; 
+	} else { //more than one block to read
+		int initial = BLOCK_SIZE - (offset % BLOCK_SIZE);
+		read += copyToBuffer(block_buf, buf, initial, offset, 0);
+		fs_lseek(fd, currFS.fd_table[fd].offset + read);
+		if(read != initial){
+			return read;
+		}
+	}
+
+	//read middle blocks
+	for(i = 1; i < numBlocks - 1; i++){
+		*block_idx = currFS.fat[*block_idx];
+
+		if(currFS.fat[*block_idx] != FAT_EOC){
+			block_read(block_offset + *block_idx, buf + read);
+			read += BLOCK_SIZE;
+			fs_lseek(fd, currFS.fd_table[fd].offset + BLOCK_SIZE);
+		} else {
+			block_read(block_offset + *block_idx, block_buf);
+			int bytesRead = copyToBuffer(block_buf, buf, count - read, 0, read);
+			fs_lseek(fd, currFS.fd_table[fd].offset + bytesRead);
+			read += bytesRead;
+			return read;
+		} 
+	}
+
+	//read last block
+	if(numBlocks > 1){
+		*block_idx = currFS.fat[*block_idx];
+		block_read(block_offset + *block_idx, block_buf);
+		int bytesRead = copyToBuffer(block_buf, buf, count - read, 0, read);
+		fs_lseek(fd, currFS.fd_table[fd].offset + bytesRead);
+		read += bytesRead;
+	}
+
+	return read;
 }
