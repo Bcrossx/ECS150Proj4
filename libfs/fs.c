@@ -36,7 +36,7 @@ struct fileDesc
 	uint16_t block_idx;
 };
 
-struct __attribute__((__packed__)) fsMeta
+struct __attribute__((__packed__)) fsMeta //meta info
 {
 	struct superBlock superblock;
 	uint16_t *fat;
@@ -81,7 +81,6 @@ int isFilenameInvalid(const char *filename){
 	}
 	return -1;
 }
-
 bool isFileOpen(int root_idx){
 	for(int i = 0; i < FS_OPEN_MAX_COUNT; i++){
 		if(currFS.fd_table[i].root_idx == root_idx)

@@ -1,5 +1,6 @@
 # Target programs
-programs := test_fs.x
+programs := test_fs.x\
+						tests.x
 
 # File-system library
 FSLIB := libfs
@@ -75,4 +76,3 @@ clean:
 # Keep object files around
 .PRECIOUS: %.o
 .PHONY: clean $(libfs)
-
